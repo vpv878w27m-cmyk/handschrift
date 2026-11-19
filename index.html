@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Handschrift">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef0f3">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<script>window.HANDSCHRIFT_APP = true;</script>
+<title>Meine Handschrift</title>
+<style>
+/* Layout: Eingabe oben, darunter ein Blatt im Look des GoodNotes-Hefts, Werkzeuge daneben bzw. darüber. */
+:root {
+  --bg: #eef0f3;
+  --panel: #ffffff;
+  --fg: #1d2330;
+  --muted: #5d6676;
+  --line: #d6dae2;
+  --accent: #2a62d8;
+  --accent-fg: #ffffff;
+  --paper: #f8f7e8;
+  --rule: #d1d1d4;
+  --warn-bg: #fff4d6;
+  --warn-fg: #6b4a00;
+  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand: "Gochi Hand", "Bradley Hand", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171d; --panel: #1d2129; --fg: #e8ebf1; --muted: #9aa3b2; --line: #313744;
+    --accent: #6d9bff; --accent-fg: #0c1220; --warn-bg: #3a2f12; --warn-fg: #f3d58a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171d; --panel: #1d2129; --fg: #e8ebf1; --muted: #9aa3b2; --line: #313744;
+  --accent: #6d9bff; --accent-fg: #0c1220; --warn-bg: #3a2f12; --warn-fg: #f3d58a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 1.35rem; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0; font-size: 0.9rem; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+label { font-size: 0.8rem; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; display: block; margin-bottom: 6px; }
+textarea {
+  width: 100%; min-height: 120px; resize: vertical; font: inherit; font-size: 16px; color: var(--fg);
+  background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+}
+textarea:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.controls { display: grid; gap: 16px; }
+.inks { display: flex; gap: 8px; }
+.ink { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.ink[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--panel) inset; }
+.row { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button.primary, button.secondary {
+  font: inherit; font-weight: 600; border-radius: 8px; padding: 10px 14px; cursor: pointer; border: 1px solid transparent;
+}
+button.primary { background: var(--accent); color: var(--accent-fg); }
+button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
+.paper-wrap { width: 100%; max-width: 100%; overflow-x: auto; border-radius: 6px; border: 1px solid var(--line); }
+.paper { background: var(--paper); display: block; }
+.status { font-size: 0.85rem; color: var(--muted); min-height: 1.3em; margin: 8px 0 0; }
+.warn { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; }
+.warn b { font-family: var(--font-hand); font-size: 1.1rem; letter-spacing: 0.08em; font-weight: 400; }
+.how { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: 0.85rem; display: grid; gap: 4px; }
+.out { display: grid; gap: 8px; }
+.out img { max-width: 100%; background:
+  repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 16px 16px; border-radius: 6px; -webkit-touch-callout: default; }
+@media (prefers-reduced-motion: no-preference) { button { transition: filter .15s; } button:hover { filter: brightness(1.05); } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Meine Handschrift</h1>
+    <p class="sub">Text eintippen, als Bild kopieren, in GoodNotes einfügen.</p>
+  </header>
+
+  <div class="grid">
+    <div class="panel" style="display:grid; grid-template-columns: minmax(0, 1fr); gap:14px;">
+      <div>
+        <label for="text">Dein Text</label>
+        <textarea id="text" spellcheck="true">Die Sprache verändert sich ständig, das ist ganz natürlich. Durch Artikel 5 dürfen die Bürger ihre Meinung frei äußern. Trotzdem gibt es auch hier Grenzen.</textarea>
+      </div>
+      <div>
+        <label>Vorschau auf deinem Heftpapier</label>
+        <div class="paper-wrap"><canvas id="paper" class="paper" aria-label="Vorschau in Handschrift"></canvas></div>
+        <p class="status" id="status"></p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="panel" style="display:grid; gap:16px;">
+        <div>
+          <label>Stiftfarbe</label>
+          <div class="inks" id="inks">
+            <button class="ink" data-ink="#000000" style="background:#000000" aria-pressed="true" aria-label="Schwarz"></button>
+            <button class="ink" data-ink="#007aff" style="background:#007aff" aria-pressed="false" aria-label="Blau"></button>
+            <button class="ink" data-ink="#ff3b30" style="background:#ff3b30" aria-pressed="false" aria-label="Rot"></button>
+            <button class="ink" data-ink="#1f8a4c" style="background:#1f8a4c" aria-pressed="false" aria-label="Grün"></button>
+          </div>
+        </div>
+        <div>
+          <label for="width">Zeilenbreite</label>
+          <input id="width" type="range" min="120" max="560" step="10" value="520">
+          <div class="row"><span>schmal</span><span id="widthVal">ganze Seite</span></div>
+        </div>
+        <div>
+          <label for="vary">Unregelmäßigkeit</label>
+          <input id="vary" type="range" min="0" max="100" step="5" value="55">
+          <div class="row"><span>ordentlich</span><span>locker</span></div>
+        </div>
+        <div class="btns">
+          <button class="secondary" id="shuffle" type="button">Neu mischen</button>
+        </div>
+      </div>
+
+      <div class="panel out">
+        <label>Für GoodNotes</label>
+        <div class="btns">
+          <button class="primary" id="copy" type="button">Bild kopieren</button>
+          <button class="secondary" id="share" type="button" hidden>Teilen …</button>
+        </div>
+        <img id="outImg" alt="Dein Text in Handschrift, transparenter Hintergrund">
+        <ol class="how">
+          <li>Auf <b>Bild kopieren</b> tippen. Falls das nicht geht: Bild oben gedrückt halten → <b>Kopieren</b>.</li>
+          <li>In GoodNotes auf die Seite tippen → <b>Einsetzen</b>.</li>
+          <li>Größe an deine Linien anpassen. Zum Ändern hier neu eintippen und erneut einfügen.</li>
+        </ol>
+      </div>
+
+      <div class="warn" id="missing" hidden></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PT_PER_LINE = 17.86;      // Linienabstand im Heft (Punkte)
+  const EXPORT_PX_PER_PT = 6;     // Auflösung des Bildes für GoodNotes
+  const $ = (id) => document.getElementById(id);
+  const textEl = $("text"), paper = $("paper"), statusEl = $("status"), outImg = $("outImg");
+  let data = null, seed = 1, ink = "#000000", lastBlob = null, renderTimer = 0;
+
+  try { const t = localStorage.getItem("hs-text"); if (t) textEl.value = t; } catch (e) {}
+
+  // Kleiner, reproduzierbarer Zufall: gleiche Eingabe + gleicher Seed = gleiches Bild.
+  function rng(s) {
+    return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+
+  const pathCache = new Map();
+  function path(d) { let p = pathCache.get(d); if (!p) { p = new Path2D(d); pathCache.set(d, p); } return p; }
+
+  // Welche Form für ein Zeichen? Fehlende Großbuchstaben -> vergrößerter Kleinbuchstabe,
+  // sonst Ersatzschrift.
+  function sourceFor(ch) {
+    const g = data.glyphs;
+    if (g[ch]) return { list: g[ch], sx: 1, sy: 1 };
+    const low = ch.toLowerCase();
+    if (low !== ch && g[low]) return { list: g[low], sx: 1.15, sy: 1.5, approx: true };
+    const up = ch.toUpperCase();
+    if (up !== ch && g[up]) return { list: g[up], sx: 0.75, sy: 0.6, approx: true };
+    return null;
+  }
+
+  function layout(text, maxW, vary) {
+    const U = data.unit, R = rng(seed);
+    const items = [];                  // {kind, x, y, ...} in Einheiten, y = Grundlinie
+    const lineH = data.line;
+    const missing = new Set();
+    const lastVariant = {};
+    const wordGap = () => U * (3.1 + R() * 0.9 * vary);
+    const letterGap = () => U * (0.12 + (R() - 0.3) * 0.35 * vary);
+
+    // Wörter mit Breite vorbereiten
+    let x = 0, line = 0, lineDrift = 0, lineSlope = 0;
+    const newLine = () => { line++; x = 0; lineDrift = (R() - 0.5) * U * 0.5 * vary; lineSlope = (R() - 0.5) * 0.006 * vary; };
+    lineDrift = (R() - 0.5) * U * 0.5 * vary; lineSlope = (R() - 0.5) * 0.006 * vary;
+
+    const paragraphs = text.replace(/\r/g, "").split("\n");
+    paragraphs.forEach((para, pi) => {
+      if (pi > 0) newLine();
+      const words = para.split(/ +/).filter((w) => w.length);
+      for (const word of words) {
+        const glyphs = [];
+        let w = 0;
+        for (const ch of word) {
+          const src = sourceFor(ch);
+          const gap = glyphs.length ? letterGap() : 0;
+          if (!src) {
+            missing.add(ch);
+            const fw = U * 4.2;
+            glyphs.push({ kind: "text", ch, dx: w + gap, w: fw });
+            w += gap + fw;
+            continue;
+          }
+          if (src.approx) missing.add(ch);
+          const list = src.list;
+          let vi = Math.floor(R() * list.length);
+          if (list.length > 1 && vi === lastVariant[ch]) vi = (vi + 1 + Math.floor(R() * (list.length - 1))) % list.length;
+          lastVariant[ch] = vi;
+          const v = list[vi];
+          const sc = 1 + (R() - 0.5) * 0.08 * vary;
+          glyphs.push({ kind: "glyph", d: v.d, dx: w + gap, sx: src.sx * sc, sy: src.sy * sc,
+            dy: (R() - 0.5) * U * 0.55 * vary, rot: (R() - 0.5) * 0.045 * vary, w: v.w * src.sx * sc });
+          w += gap + v.w * src.sx * sc;
+        }
+        if (x > 0 && x + w > maxW) newLine();
+        for (const g of glyphs) items.push({ ...g, x: x + g.dx, line, drift: lineDrift + (x + g.dx) * lineSlope });
+        x += w + wordGap();
+      }
+    });
+    return { items, lines: line + 1, missing };
+  }
+
+  function draw(ctx, lay, pxPerUnit, opts) {
+    const lineH = data.line;
+    const top = lineH * (opts.topLines ?? 1);
+    ctx.save();
+    ctx.scale(pxPerUnit, pxPerUnit);
+    ctx.translate(opts.padX, 0);
+    ctx.fillStyle = ink;
+    for (const it of lay.items) {
+      const baseY = top + it.line * lineH + it.drift;
+      ctx.save();
+      if (it.kind === "glyph") {
+        ctx.translate(it.x, baseY + it.dy);
+        ctx.rotate(it.rot);
+        ctx.scale(it.sx, it.sy);
+        ctx.fill(path(it.d), "nonzero");
+      } else {
+        ctx.translate(it.x, baseY);
+        ctx.font = `${data.xheight * 2.1}px ${getComputedStyle(document.documentElement).getPropertyValue("--font-hand")}`;
+        ctx.fillText(it.ch, 0, 0);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function render() {
+    if (!data) return;
+    const text = textEl.value;
+    try { localStorage.setItem("hs-text", text); } catch (e) {}
+    const vary = Number($("vary").value) / 100 * 1.8;
+    const widthPt = Number($("width").value);
+    const maxW = widthPt * data.unit;
+    const lay = layout(text, maxW, vary);
+    const padX = data.unit * 6;
+
+    // Vorschau: Heftpapier mit Linien, Breite passt sich dem Bildschirm an
+    // Mindestens ~40 px pro Linie, damit man die Schrift gut erkennt (sonst seitlich scrollen).
+    const fitW = paper.parentElement.clientWidth;
+    const pxPerUnit = Math.max(fitW / (maxW + padX * 2), 40 / data.line);
+    const cssW = Math.ceil((maxW + padX * 2) * pxPerUnit);
+    const lines = Math.max(lay.lines + 1, 4);
+    const cssH = Math.ceil(lines * data.line * pxPerUnit + data.line * 0.4 * pxPerUnit);
+    const dpr = window.devicePixelRatio || 1;
+    paper.width = Math.round(cssW * dpr); paper.height = Math.round(cssH * dpr);
+    paper.style.width = cssW + "px"; paper.style.height = cssH + "px";
+    const ctx = paper.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.strokeStyle = "#d1d1d4"; ctx.lineWidth = 1;
+    for (let i = 1; i <= lines; i++) {
+      const y = Math.round(i * data.line * pxPerUnit) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke();
+    }
+    draw(ctx, lay, pxPerUnit, { padX, topLines: 1 });
+
+    // Export: transparenter Hintergrund, eng um den Text
+    let maxX = 0;
+    for (const it of lay.items) maxX = Math.max(maxX, it.x + it.w);
+    const exW = maxX + padX * 2;
+    const exH = (lay.lines + 0.45) * data.line;
+    const s = EXPORT_PX_PER_PT / data.unit;
+    const ex = document.createElement("canvas");
+    ex.width = Math.max(1, Math.ceil(exW * s)); ex.height = Math.max(1, Math.ceil(exH * s));
+    const ectx = ex.getContext("2d");
+    draw(ectx, lay, s, { padX, topLines: 0.78 });
+    ex.toBlob((b) => {
+      lastBlob = b;
+      if (outImg.dataset.url) URL.revokeObjectURL(outImg.dataset.url);
+      const url = URL.createObjectURL(b);
+      outImg.dataset.url = url; outImg.src = url;
+    }, "image/png");
+
+    const m = [...lay.missing].filter((c) => c.trim());
+    const warn = $("missing");
+    if (m.length) {
+      warn.hidden = false;
+      warn.innerHTML = "";
+      const p = document.createElement("div");
+      p.append("Diese Zeichen kommen in deinem Heft noch nicht sauber vor und werden ersetzt: ");
+      const b = document.createElement("b"); b.textContent = m.join(" "); p.append(b);
+      p.append(". Schreib sie in die Vorlage, dann kommen sie dazu.");
+      warn.append(p);
+    } else warn.hidden = true;
+    statusEl.textContent = `${lay.lines} ${lay.lines === 1 ? "Zeile" : "Zeilen"}`;
+  }
+
+  const schedule = () => { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); };
+  textEl.addEventListener("input", schedule);
+  $("vary").addEventListener("input", schedule);
+  $("width").addEventListener("input", () => {
+    const v = Number($("width").value);
+    $("widthVal").textContent = v >= 500 ? "ganze Seite" : v <= 200 ? "Spalte" : "halbe Seite";
+    schedule();
+  });
+  $("shuffle").addEventListener("click", () => { seed = (Math.random() * 1e9) | 0; render(); });
+  $("inks").addEventListener("click", (e) => {
+    const b = e.target.closest(".ink"); if (!b) return;
+    ink = b.dataset.ink;
+    for (const x of $("inks").children) x.setAttribute("aria-pressed", String(x === b));
+    render();
+  });
+  $("copy").addEventListener("click", async () => {
+    const btn = $("copy");
+    try {
+      if (!lastBlob || !window.ClipboardItem) throw new Error("no clipboard");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": lastBlob })]);
+      btn.textContent = "Kopiert – jetzt in GoodNotes einsetzen";
+    } catch (e) {
+      btn.textContent = "Bitte Bild gedrückt halten → Kopieren";
+    }
+    setTimeout(() => { btn.textContent = "Bild kopieren"; }, 3500);
+  });
+  // Teilen (nur in der installierten App): öffnet das iPad-Teilen-Menü, dort GoodNotes wählen.
+  if (window.HANDSCHRIFT_APP && navigator.canShare) {
+    try {
+      const probe = new File([new Blob(["x"], { type: "image/png" })], "t.png", { type: "image/png" });
+      if (navigator.canShare({ files: [probe] })) $("share").hidden = false;
+    } catch (e) {}
+  }
+  $("share").addEventListener("click", async () => {
+    if (!lastBlob) return;
+    try {
+      await navigator.share({ files: [new File([lastBlob], "Handschrift.png", { type: "image/png" })] });
+    } catch (e) { /* abgebrochen */ }
+  });
+  window.addEventListener("resize", schedule);
+
+  statusEl.textContent = "Lade deine Buchstaben …";
+  fetch("glyphs.json").then((r) => r.json()).then((d) => {
+    data = d;
+    (document.fonts ? document.fonts.ready : Promise.resolve()).then(render);
+  }).catch(() => { statusEl.textContent = "Die Buchstaben konnten nicht geladen werden. Seite neu laden."; });
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
