@@ -123,8 +123,8 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
         </div>
         <div>
           <label for="width">Zeilenbreite</label>
-          <input id="width" type="range" min="120" max="560" step="10" value="520">
-          <div class="row"><span>schmal</span><span id="widthVal">ganze Seite</span></div>
+          <input id="width" type="range" min="120" max="575" step="5" value="575">
+          <div class="row"><span>schmal</span><span id="widthVal">ganze A4-Seite</span></div>
         </div>
         <div>
           <label for="vary">Unregelmäßigkeit</label>
@@ -146,7 +146,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
         <ol class="how">
           <li>Auf <b>Bild kopieren</b> tippen. Falls das nicht geht: Bild oben gedrückt halten → <b>Kopieren</b>.</li>
           <li>In GoodNotes auf die Seite tippen → <b>Einsetzen</b>.</li>
-          <li>Größe an deine Linien anpassen. Zum Ändern hier neu eintippen und erneut einfügen.</li>
+          <li>Das Bild ist genau A4-breit: auf volle Seitenbreite ziehen, dann passt die Größe zu deinem Heft. Danach nur noch hoch/runter auf die Linien schieben.</li>
         </ol>
       </div>
 
@@ -158,7 +158,9 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
 <script>
 (() => {
   const PT_PER_LINE = 17.86;      // Linienabstand im Heft (Punkte)
-  const EXPORT_PX_PER_PT = 6;     // Auflösung des Bildes für GoodNotes
+  const EXPORT_PX_PER_PT = 6;     // Auflösung des Bildes für GoodNotes (= 432 dpi)
+  const A4_W_PT = 595.28;         // A4-Breite in Punkten, wie die Seiten in GoodNotes
+  const MARGIN_PT = 8;            // linker Rand wie in deinem Heft
   const $ = (id) => document.getElementById(id);
   const textEl = $("text"), paper = $("paper"), statusEl = $("status"), outImg = $("outImg");
   let data = null, seed = 1, ink = "#000000", lastBlob = null, renderTimer = 0;
@@ -269,13 +271,14 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     const widthPt = Number($("width").value);
     const maxW = widthPt * data.unit;
     const lay = layout(text, maxW, vary);
-    const padX = data.unit * 6;
+    const padX = data.unit * MARGIN_PT;
+    const pageW = A4_W_PT * data.unit;   // Vorschau und Bild sind immer genau A4-breit
 
     // Vorschau: Heftpapier mit Linien, Breite passt sich dem Bildschirm an
     // Mindestens ~40 px pro Linie, damit man die Schrift gut erkennt (sonst seitlich scrollen).
     const fitW = paper.parentElement.clientWidth;
-    const pxPerUnit = Math.max(fitW / (maxW + padX * 2), 40 / data.line);
-    const cssW = Math.ceil((maxW + padX * 2) * pxPerUnit);
+    const pxPerUnit = Math.max(fitW / pageW, 40 / data.line);
+    const cssW = Math.ceil(pageW * pxPerUnit);
     const lines = Math.max(lay.lines + 1, 4);
     const cssH = Math.ceil(lines * data.line * pxPerUnit + data.line * 0.4 * pxPerUnit);
     const dpr = window.devicePixelRatio || 1;
@@ -291,17 +294,17 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     }
     draw(ctx, lay, pxPerUnit, { padX, topLines: 1 });
 
-    // Export: transparenter Hintergrund, eng um den Text
-    let maxX = 0;
-    for (const it of lay.items) maxX = Math.max(maxX, it.x + it.w);
-    const exW = maxX + padX * 2;
+    // Export: transparenter Hintergrund, genau A4-breit. In GoodNotes auf volle
+    // Seitenbreite ziehen, dann hat die Schrift dieselbe Größe wie in deinem Heft.
+    const exW = pageW;
     const exH = (lay.lines + 0.45) * data.line;
     const s = EXPORT_PX_PER_PT / data.unit;
     const ex = document.createElement("canvas");
     ex.width = Math.max(1, Math.ceil(exW * s)); ex.height = Math.max(1, Math.ceil(exH * s));
     const ectx = ex.getContext("2d");
     draw(ectx, lay, s, { padX, topLines: 0.78 });
-    ex.toBlob((b) => {
+    ex.toBlob(async (raw) => {
+      const b = await withDpi(raw, EXPORT_PX_PER_PT * 72);
       lastBlob = b;
       if (outImg.dataset.url) URL.revokeObjectURL(outImg.dataset.url);
       const url = URL.createObjectURL(b);
@@ -322,12 +325,39 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     statusEl.textContent = `${lay.lines} ${lay.lines === 1 ? "Zeile" : "Zeilen"}`;
   }
 
+  // Auflösung ins PNG schreiben (pHYs-Block), damit Apps die echte Größe kennen.
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(bytes) { let c = 0xffffffff; for (const x of bytes) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  async function withDpi(blob, dpi) {
+    try {
+      const src = new Uint8Array(await blob.arrayBuffer());
+      const ppm = Math.round(dpi / 0.0254);
+      const chunk = new Uint8Array(21); const dv = new DataView(chunk.buffer);
+      dv.setUint32(0, 9); chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+      dv.setUint32(8, ppm); dv.setUint32(12, ppm); chunk[16] = 1;
+      dv.setUint32(17, crc32(chunk.subarray(4, 17)));
+      // Blöcke durchgehen: vorhandenes pHYs weglassen, neues direkt nach IHDR einfügen.
+      const sv = new DataView(src.buffer, src.byteOffset, src.byteLength);
+      const parts = [src.subarray(0, 8)];
+      for (let i = 8; i < src.length;) {
+        const len = sv.getUint32(i);
+        const type = String.fromCharCode(...src.subarray(i + 4, i + 8));
+        const end = i + 12 + len;
+        if (type !== "pHYs") parts.push(src.subarray(i, end));
+        if (type === "IHDR") parts.push(chunk);
+        i = end;
+      }
+      return new Blob(parts, { type: "image/png" });
+    } catch (e) { return blob; }
+  }
+
   const schedule = () => { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); };
   textEl.addEventListener("input", schedule);
   $("vary").addEventListener("input", schedule);
   $("width").addEventListener("input", () => {
     const v = Number($("width").value);
-    $("widthVal").textContent = v >= 500 ? "ganze Seite" : v <= 200 ? "Spalte" : "halbe Seite";
+    $("widthVal").textContent = v >= 540 ? "ganze A4-Seite" : v <= 200 ? "Spalte" : v <= 320 ? "halbe Seite" : "fast ganze Seite";
     schedule();
   });
   $("shuffle").addEventListener("click", () => { seed = (Math.random() * 1e9) | 0; render(); });
