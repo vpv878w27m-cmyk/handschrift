@@ -194,7 +194,8 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     const lineH = data.line;
     const missing = new Set();
     const lastVariant = {};
-    const wordGap = () => U * (3.1 + R() * 0.9 * vary);
+    // Wortabstand wie im Heft gemessen: im Mittel 6,3 pt, meist zwischen 5,3 und 7,7 pt.
+    const wordGap = () => U * (6.2 + (R() - 0.5) * 2.4 * Math.min(vary, 1.2));
     const letterGap = () => U * (0.12 + (R() - 0.3) * 0.35 * vary);
 
     // Wörter mit Breite vorbereiten
