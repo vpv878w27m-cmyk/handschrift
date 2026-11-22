@@ -83,6 +83,9 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
 .warn b { font-family: var(--font-hand); font-size: 1.1rem; letter-spacing: 0.08em; font-weight: 400; }
 .how { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: 0.85rem; display: grid; gap: 4px; }
 .out { display: grid; gap: 8px; }
+.check { display: flex; align-items: center; gap: 8px; }
+.check label { margin: 0; font-weight: 500; color: var(--fg); letter-spacing: 0; font-size: 0.9rem; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .out img { max-width: 100%; background:
   repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 16px 16px; border-radius: 6px; -webkit-touch-callout: default; }
 @media (prefers-reduced-motion: no-preference) { button { transition: filter .15s; } button:hover { filter: brightness(1.05); } }
@@ -128,7 +131,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
         </div>
         <div>
           <label for="vary">Unregelmäßigkeit</label>
-          <input id="vary" type="range" min="0" max="100" step="5" value="55">
+          <input id="vary" type="range" min="0" max="100" step="5" value="35">
           <div class="row"><span>ordentlich</span><span>locker</span></div>
         </div>
         <div class="btns">
@@ -136,8 +139,18 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
         </div>
       </div>
 
+      <div class="panel out" id="pdfPanel" hidden>
+        <label>Als Heftseite (empfohlen)</label>
+        <button class="primary" id="pdf" type="button">Seite an GoodNotes senden</button>
+        <div class="check"><input type="checkbox" id="paperOn" checked><label for="paperOn">Mit deinem Linienpapier</label></div>
+        <ol class="how">
+          <li>Im Teilen-Menü <b>GoodNotes</b> wählen → <b>In bestehendes Dokument importieren</b> → dein Heft.</li>
+          <li>Die Schrift ist fest Teil der Seite: nichts verrutscht, gestochen scharf. Du kannst darauf weiterschreiben.</li>
+        </ol>
+      </div>
+
       <div class="panel out">
-        <label>Für GoodNotes</label>
+        <label>Als Bild</label>
         <div class="btns">
           <button class="primary" id="copy" type="button">Bild kopieren</button>
           <button class="secondary" id="share" type="button" hidden>Teilen …</button>
@@ -163,7 +176,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
   const MARGIN_PT = 8;            // linker Rand wie in deinem Heft
   const $ = (id) => document.getElementById(id);
   const textEl = $("text"), paper = $("paper"), statusEl = $("status"), outImg = $("outImg");
-  let data = null, seed = 1, ink = "#000000", lastBlob = null, renderTimer = 0;
+  let data = null, seed = 1, ink = "#000000", lastBlob = null, renderTimer = 0, lastLay = null;
 
   try { const t = localStorage.getItem("hs-text"); if (t) textEl.value = t; } catch (e) {}
 
@@ -196,7 +209,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     const lastVariant = {};
     // Wortabstand wie im Heft gemessen: im Mittel 6,3 pt, meist zwischen 5,3 und 7,7 pt.
     const wordGap = () => U * (6.2 + (R() - 0.5) * 2.4 * Math.min(vary, 1.2));
-    const letterGap = () => U * (0.12 + (R() - 0.3) * 0.35 * vary);
+    const letterGap = () => U * (0.18 + (R() - 0.4) * 0.25 * vary);
 
     // Wörter mit Breite vorbereiten
     let x = 0, line = 0, lineDrift = 0, lineSlope = 0;
@@ -226,9 +239,9 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
           if (list.length > 1 && vi === lastVariant[ch]) vi = (vi + 1 + Math.floor(R() * (list.length - 1))) % list.length;
           lastVariant[ch] = vi;
           const v = list[vi];
-          const sc = 1 + (R() - 0.5) * 0.08 * vary;
+          const sc = 1 + (R() - 0.5) * 0.06 * vary;
           glyphs.push({ kind: "glyph", d: v.d, dx: w + gap, sx: src.sx * sc, sy: src.sy * sc,
-            dy: (R() - 0.5) * U * 0.55 * vary, rot: (R() - 0.5) * 0.045 * vary, w: v.w * src.sx * sc });
+            dy: (R() - 0.5) * U * 0.4 * vary, rot: (R() - 0.5) * 0.03 * vary, w: v.w * src.sx * sc });
           w += gap + v.w * src.sx * sc;
         }
         if (x > 0 && x + w > maxW) newLine();
@@ -272,6 +285,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     const widthPt = Number($("width").value);
     const maxW = widthPt * data.unit;
     const lay = layout(text, maxW, vary);
+    lastLay = lay;
     const padX = data.unit * MARGIN_PT;
     const pageW = A4_W_PT * data.unit;   // Vorschau und Bild sind immer genau A4-breit
 
@@ -353,6 +367,87 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     } catch (e) { return blob; }
   }
 
+
+  // ---------- Heftseite als PDF (Vektor) ----------
+  const PAGE_W = 595.28, PAGE_H = 841.89;     // A4 in Punkten
+  const FIRST_RULE = 58.87;                   // erste Linie wie in deinem GoodNotes-Heft
+  const FIRST_BASE = FIRST_RULE + PT_PER_LINE; // erste Schreibzeile
+  const LINES_PER_PAGE = Math.floor((PAGE_H - 14 - FIRST_BASE) / PT_PER_LINE) + 1;
+  const n4 = (v) => (Math.round(v * 10000) / 10000).toString();
+
+  function pdfPath(d) {
+    const t = d.match(/[MLHVCZ]|-?\d+(?:\.\d+)?/g) || [];
+    let i = 0, cmd = "", cx = 0, cy = 0; const out = [];
+    while (i < t.length) {
+      if (/[MLHVCZ]/.test(t[i])) { cmd = t[i++]; if (cmd === "Z") { out.push("h"); } continue; }
+      const num = () => Number(t[i++]);
+      if (cmd === "M") { cx = num(); cy = num(); out.push(`${cx} ${cy} m`); cmd = "L"; }
+      else if (cmd === "L") { cx = num(); cy = num(); out.push(`${cx} ${cy} l`); }
+      else if (cmd === "H") { cx = num(); out.push(`${cx} ${cy} l`); }
+      else if (cmd === "V") { cy = num(); out.push(`${cx} ${cy} l`); }
+      else if (cmd === "C") { const a = [num(), num(), num(), num(), num(), num()]; cx = a[4]; cy = a[5]; out.push(`${a.join(" ")} c`); }
+      else i++;
+    }
+    return out.join("\n");
+  }
+
+  function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map((v) => v.toFixed(3)).join(" "); }
+
+  function buildPdf(lay, withPaper) {
+    const k = 1 / data.unit, padX = MARGIN_PT;
+    const pages = Math.max(1, Math.ceil(lay.lines / LINES_PER_PAGE));
+    const streams = [];
+    for (let pg = 0; pg < pages; pg++) {
+      const c = [];
+      if (withPaper) {
+        c.push("0.973 0.969 0.910 rg", `0 0 ${PAGE_W} ${PAGE_H} re f`, "0.820 0.820 0.831 RG 0.54 w");
+        for (let y = FIRST_RULE; y < PAGE_H - 8; y += PT_PER_LINE) {
+          const py = n4(PAGE_H - y); c.push(`0 ${py} m ${PAGE_W} ${py} l S`);
+        }
+      }
+      c.push(`${hexRgb(ink)} rg`, "q", `1 0 0 -1 0 ${PAGE_H} cm`);  // ab hier: oben links, y nach unten
+      const texts = [];
+      for (const it of lay.items) {
+        if (Math.floor(it.line / LINES_PER_PAGE) !== pg) continue;
+        const line = it.line % LINES_PER_PAGE;
+        const baseY = FIRST_BASE + line * PT_PER_LINE + it.drift * k;
+        const x = padX + it.x * k;
+        if (it.kind === "glyph") {
+          const cs = Math.cos(it.rot), sn = Math.sin(it.rot);
+          c.push("q", [cs * it.sx * k, sn * it.sx * k, -sn * it.sy * k, cs * it.sy * k, x, baseY + it.dy * k].map(n4).join(" ") + " cm",
+                 pdfPath(it.d), "f", "Q");
+        } else {
+          texts.push({ x, y: baseY, ch: it.ch });
+        }
+      }
+      c.push("Q");
+      for (const tx of texts) {   // Ersatzzeichen, die noch nicht in deiner Schrift sind
+        const esc = tx.ch.replace(/[\\()]/g, (m) => "\\" + m);
+        if (/^[\x20-\x7e]$/.test(tx.ch)) c.push(`BT /F1 ${n4(data.xheight * 2.1 * k)} Tf ${n4(tx.x)} ${n4(PAGE_H - tx.y)} Td (${esc}) Tj ET`);
+      }
+      streams.push(c.join("\n"));
+    }
+    // PDF-Datei zusammensetzen (nur ASCII, daher Zeichen = Bytes)
+    const objs = [];
+    const add = (s) => { objs.push(s); return objs.length; };
+    const catalog = add(null), pagesObj = add(null), font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+    const kids = [];
+    for (const st of streams) {
+      const cont = add(`<< /Length ${st.length} >>\nstream\n${st}\nendstream`);
+      kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${cont} 0 R >>`));
+    }
+    objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
+    objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((n) => n + " 0 R").join(" ")}] /Count ${kids.length} >>`;
+    let out = "%PDF-1.4\n";
+    const offs = [];
+    objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => String(o).padStart(10, "0") + " 00000 n \n").join("");
+    out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return new Blob([out], { type: "application/pdf" });
+  }
+  window.__testPdf = (paper) => buildPdf(lastLay, paper);  // nur für Tests
+
   const schedule = () => { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); };
   textEl.addEventListener("input", schedule);
   $("vary").addEventListener("input", schedule);
@@ -391,6 +486,22 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     try {
       await navigator.share({ files: [new File([lastBlob], "Handschrift.png", { type: "image/png" })] });
     } catch (e) { /* abgebrochen */ }
+  });
+  if (window.HANDSCHRIFT_APP) $("pdfPanel").hidden = false;
+  $("pdf").addEventListener("click", async () => {
+    if (!lastLay) return;
+    const btn = $("pdf");
+    const blob = buildPdf(lastLay, $("paperOn").checked);
+    const file = new File([blob], "Handschrift.pdf", { type: "application/pdf" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob);       // ohne Teilen-Menü: PDF öffnen, dort teilen
+    if (!window.open(url, "_blank")) location.href = url;
+    btn.textContent = "Seite an GoodNotes senden";
   });
   window.addEventListener("resize", schedule);
 
