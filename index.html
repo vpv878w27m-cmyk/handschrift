@@ -83,6 +83,8 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
 .warn b { font-family: var(--font-hand); font-size: 1.1rem; letter-spacing: 0.08em; font-weight: 400; }
 .how { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: 0.85rem; display: grid; gap: 4px; }
 .out { display: grid; gap: 8px; }
+.hint { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); }
+button.link { font: inherit; font-size: 0.8rem; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
 .check { display: flex; align-items: center; gap: 8px; }
 .check label { margin: 0; font-weight: 500; color: var(--fg); letter-spacing: 0; font-size: 0.9rem; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -130,6 +132,12 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
           <div class="row"><span>schmal</span><span id="widthVal">ganze A4-Seite</span></div>
         </div>
         <div>
+          <label for="lineSp">Linienabstand</label>
+          <input id="lineSp" type="range" min="14" max="24" step="0.02" value="17.86">
+          <div class="row"><span id="lineSpVal">17,86 pt (dein Deutsch-Heft)</span><button class="link" id="lineSpReset" type="button">zurücksetzen</button></div>
+          <p class="hint">Rutscht der Text nach unten hin von den Linien, hat dein Heft einen anderen Abstand: hier anpassen.</p>
+        </div>
+        <div>
           <label for="vary">Unregelmäßigkeit</label>
           <input id="vary" type="range" min="0" max="100" step="5" value="35">
           <div class="row"><span>ordentlich</span><span>locker</span></div>
@@ -170,7 +178,9 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
 
 <script>
 (() => {
-  const PT_PER_LINE = 17.86;      // Linienabstand im Heft (Punkte)
+  const DEFAULT_LINE_PT = 17.86;  // Linienabstand in deinem Deutsch-Heft (Punkte)
+  const linePt = () => Number($("lineSp").value) || DEFAULT_LINE_PT;
+  const lineU = () => linePt() * data.unit;   // Linienabstand in Glyphen-Einheiten
   const EXPORT_PX_PER_PT = 6;     // Auflösung des Bildes für GoodNotes (= 432 dpi)
   const A4_W_PT = 595.28;         // A4-Breite in Punkten, wie die Seiten in GoodNotes
   const MARGIN_PT = 8;            // linker Rand wie in deinem Heft
@@ -204,7 +214,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
   function layout(text, maxW, vary) {
     const U = data.unit, R = rng(seed);
     const items = [];                  // {kind, x, y, ...} in Einheiten, y = Grundlinie
-    const lineH = data.line;
+    const lineH = lineU();
     const missing = new Set();
     const lastVariant = {};
     // Wortabstand wie im Heft gemessen: im Mittel 6,3 pt, meist zwischen 5,3 und 7,7 pt.
@@ -253,7 +263,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
   }
 
   function draw(ctx, lay, pxPerUnit, opts) {
-    const lineH = data.line;
+    const lineH = lineU();
     const top = lineH * (opts.topLines ?? 1);
     ctx.save();
     ctx.scale(pxPerUnit, pxPerUnit);
@@ -292,10 +302,10 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     // Vorschau: Heftpapier mit Linien, Breite passt sich dem Bildschirm an
     // Mindestens ~40 px pro Linie, damit man die Schrift gut erkennt (sonst seitlich scrollen).
     const fitW = paper.parentElement.clientWidth;
-    const pxPerUnit = Math.max(fitW / pageW, 40 / data.line);
+    const pxPerUnit = Math.max(fitW / pageW, 40 / lineU());
     const cssW = Math.ceil(pageW * pxPerUnit);
     const lines = Math.max(lay.lines + 1, 4);
-    const cssH = Math.ceil(lines * data.line * pxPerUnit + data.line * 0.4 * pxPerUnit);
+    const cssH = Math.ceil(lines * lineU() * pxPerUnit + lineU() * 0.4 * pxPerUnit);
     const dpr = window.devicePixelRatio || 1;
     paper.width = Math.round(cssW * dpr); paper.height = Math.round(cssH * dpr);
     paper.style.width = cssW + "px"; paper.style.height = cssH + "px";
@@ -304,7 +314,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.strokeStyle = "#d1d1d4"; ctx.lineWidth = 1;
     for (let i = 1; i <= lines; i++) {
-      const y = Math.round(i * data.line * pxPerUnit) + 0.5;
+      const y = Math.round(i * lineU() * pxPerUnit) + 0.5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke();
     }
     draw(ctx, lay, pxPerUnit, { padX, topLines: 1 });
@@ -312,7 +322,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     // Export: transparenter Hintergrund, genau A4-breit. In GoodNotes auf volle
     // Seitenbreite ziehen, dann hat die Schrift dieselbe Größe wie in deinem Heft.
     const exW = pageW;
-    const exH = (lay.lines + 0.45) * data.line;
+    const exH = (lay.lines + 0.45) * lineU();
     const s = EXPORT_PX_PER_PT / data.unit;
     const ex = document.createElement("canvas");
     ex.width = Math.max(1, Math.ceil(exW * s)); ex.height = Math.max(1, Math.ceil(exH * s));
@@ -371,8 +381,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
   // ---------- Heftseite als PDF (Vektor) ----------
   const PAGE_W = 595.28, PAGE_H = 841.89;     // A4 in Punkten
   const FIRST_RULE = 58.87;                   // erste Linie wie in deinem GoodNotes-Heft
-  const FIRST_BASE = FIRST_RULE + PT_PER_LINE; // erste Schreibzeile
-  const LINES_PER_PAGE = Math.floor((PAGE_H - 14 - FIRST_BASE) / PT_PER_LINE) + 1;
+
   const n4 = (v) => (Math.round(v * 10000) / 10000).toString();
 
   function pdfPath(d) {
@@ -394,14 +403,16 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
   function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map((v) => v.toFixed(3)).join(" "); }
 
   function buildPdf(lay, withPaper) {
-    const k = 1 / data.unit, padX = MARGIN_PT;
+    const k = 1 / data.unit, padX = MARGIN_PT, L = linePt();
+    const FIRST_BASE = FIRST_RULE + L;                                   // erste Schreibzeile
+    const LINES_PER_PAGE = Math.floor((PAGE_H - 14 - FIRST_BASE) / L) + 1;
     const pages = Math.max(1, Math.ceil(lay.lines / LINES_PER_PAGE));
     const streams = [];
     for (let pg = 0; pg < pages; pg++) {
       const c = [];
       if (withPaper) {
         c.push("0.973 0.969 0.910 rg", `0 0 ${PAGE_W} ${PAGE_H} re f`, "0.820 0.820 0.831 RG 0.54 w");
-        for (let y = FIRST_RULE; y < PAGE_H - 8; y += PT_PER_LINE) {
+        for (let y = FIRST_RULE; y < PAGE_H - 8; y += L) {
           const py = n4(PAGE_H - y); c.push(`0 ${py} m ${PAGE_W} ${py} l S`);
         }
       }
@@ -410,7 +421,7 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
       for (const it of lay.items) {
         if (Math.floor(it.line / LINES_PER_PAGE) !== pg) continue;
         const line = it.line % LINES_PER_PAGE;
-        const baseY = FIRST_BASE + line * PT_PER_LINE + it.drift * k;
+        const baseY = FIRST_BASE + line * L + it.drift * k;
         const x = padX + it.x * k;
         if (it.kind === "glyph") {
           const cs = Math.cos(it.rot), sn = Math.sin(it.rot);
@@ -503,6 +514,18 @@ button.secondary { background: transparent; color: var(--fg); border-color: var(
     if (!window.open(url, "_blank")) location.href = url;
     btn.textContent = "Seite an GoodNotes senden";
   });
+  const showLineSp = () => {
+    const v = linePt();
+    $("lineSpVal").textContent = v.toFixed(2).replace(".", ",") + " pt" + (Math.abs(v - DEFAULT_LINE_PT) < 0.01 ? " (dein Deutsch-Heft)" : "");
+  };
+  try { const v = localStorage.getItem("hs-line"); if (v) $("lineSp").value = v; } catch (e) {}
+  showLineSp();
+  $("lineSp").addEventListener("input", () => {
+    showLineSp();
+    try { localStorage.setItem("hs-line", $("lineSp").value); } catch (e) {}
+    schedule();
+  });
+  $("lineSpReset").addEventListener("click", () => { $("lineSp").value = DEFAULT_LINE_PT; $("lineSp").dispatchEvent(new Event("input")); });
   window.addEventListener("resize", schedule);
 
   statusEl.textContent = "Lade deine Buchstaben …";
